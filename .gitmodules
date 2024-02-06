@@ -1,0 +1,3 @@
+[submodule "email-ui"]
+	path = email-ui
+	url = https://github.com/Joules17/email-ui
