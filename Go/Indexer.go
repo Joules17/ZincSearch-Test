@@ -9,6 +9,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"net/http/pprof"
 	"os"
 	"path/filepath"
 	"strings"
@@ -273,6 +274,13 @@ func main() {
 		close(pkgChan)
 		workerWg.Wait()
 		mainWg.Done()
+	}()
+
+	go func() {
+		mux := http.NewServeMux()
+		mux.HandleFunc("/debug/pprof/", pprof.Index)
+		mux.HandleFunc("/debug/pprof/profile", pprof.Profile)
+		log.Println(http.ListenAndServe("localhost:6060", mux))
 	}()
 
 	// counting time of execution
