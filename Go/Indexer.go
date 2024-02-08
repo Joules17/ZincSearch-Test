@@ -18,34 +18,113 @@ import (
 
 // Email Object Struct
 type Email struct {
-	MessageID               string
-	Date                    string
-	From                    string
-	To                      string
-	Subject                 string
-	MimeVersion             string
-	ContentType             string
-	ContentTransferEncoding string
-	XFrom                   string
-	XTo                     string
-	Xcc                     string
-	Xbcc                    string
-	XFolder                 string
-	XOrigin                 string
-	XFileName               string
-	Content                 string
+	MessageID               string `json:"message_id"`
+	Date                    string `json:"date"`
+	From                    string `json:"from"`
+	To                      string `json:"to"`
+	Subject                 string `json:"subject"`
+	MimeVersion             string `json:"mime_version"`
+	ContentType             string `json:"content_type"`
+	ContentTransferEncoding string `json:"content_transfer_encoding"`
+	XFrom                   string `json:"x_from"`
+	XTo                     string `json:"x_to"`
+	Xcc                     string `json:"x_cc"`
+	Xbcc                    string `json:"x_bcc"`
+	XFolder                 string `json:"x_folder"`
+	XOrigin                 string `json:"x_origin"`
+	XFileName               string `json:"x_file_name"`
+	Content                 string `json:"content"`
 }
 
-// Email Pkg Struct
+// EmailPkg Struct
 type EmailPkg struct {
-	Emails []Email
+	Emails []Email `json:"emails"`
 }
+
+// constant settings
+const (
+	emailsPerPkg   = 1000
+	workers        = 6
+	ZincSearchURL  = "http://localhost:4080/api/_bulkv2"
+	ZincSearchUser = "admin"
+	ZincSearchPass = "Complexpass#123"
+)
 
 // wait groups
 var mainWg sync.WaitGroup
 
-// emails per pkg
-const emailsPerPkg = 500
+// func sendToZincSearch
+// based on email Pkg provided sends a bulkv2 petition to ZincSearch
+func sendToZincSearch(emails []Email) {
+	fmt.Println("Sending package to ZincSearch...")
+	reqBody, err := json.Marshal(map[string]interface{}{
+		"index":   "emails",
+		"records": emails,
+	})
+	if err != nil {
+		fmt.Println("Error marshalling JSON:", err)
+		return
+	}
+
+	// fmt.Println("Request Body Sending: ", string(reqBody))
+
+	req, err := http.NewRequest("POST", ZincSearchURL, strings.NewReader(string(reqBody)))
+	if err != nil {
+		fmt.Println("Error creating request:", err)
+		return
+	}
+
+	req.SetBasicAuth(ZincSearchUser, ZincSearchPass)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_4) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/81.0.4044.138 Safari/537.36")
+
+	client := &http.Client{
+		Timeout: time.Second * 10, // timeout of 10 sec
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		fmt.Println("Error sending request:", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		fmt.Println("Error in response. Status code:", resp.StatusCode)
+		return
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		fmt.Println("Error reading response body:", err)
+		return
+	}
+
+	fmt.Println("Package Sent successfully!")
+	fmt.Println("Response Body:", string(body))
+}
+
+// func worker
+// worker: process pkgs and send to zincsearch
+func worker(pkgChan <-chan EmailPkg, wg *sync.WaitGroup) {
+	defer wg.Done()
+
+	var emails []Email
+
+	for pkg := range pkgChan {
+		emails = append(emails, pkg.Emails...)
+
+		if len(emails) >= emailsPerPkg {
+			sendToZincSearch(emails[:emailsPerPkg])
+			emails = emails[emailsPerPkg:]
+		}
+	}
+
+	// send other emails after closing the channel
+	if len(emails) > 0 {
+		sendToZincSearch(emails)
+	}
+}
 
 // readDirectory function
 // look for files given a path as arg (recursively)
@@ -58,6 +137,7 @@ func readDirectory(directoryPath string, wg *sync.WaitGroup, pkgChan chan<- Emai
 	}
 
 	var emails []Email
+
 	for _, file := range files {
 		filePath := filepath.Join(directoryPath, file.Name())
 
@@ -79,9 +159,9 @@ func readDirectory(directoryPath string, wg *sync.WaitGroup, pkgChan chan<- Emai
 
 			emails = append(emails, email)
 
-			if len(emails) == emailsPerPkg {
-				pkgChan <- EmailPkg{Emails: emails}
-				emails = nil
+			if len(emails) >= emailsPerPkg {
+				pkgChan <- EmailPkg{Emails: emails[:emailsPerPkg]}
+				emails = emails[emailsPerPkg:]
 			}
 		}
 	}
@@ -160,80 +240,7 @@ func scanFile(fileName, fileContent string) (Email, error) {
 	return email, nil
 }
 
-// processPkgs function
-func processPkgs(pkgChan <-chan EmailPkg, jsonChan chan<- string, wg *sync.WaitGroup) {
-	defer wg.Done()
-
-	for {
-		pkg, ok := <-pkgChan
-		if !ok {
-			// El canal de paquetes se cerró, salir del bucle
-			return
-		}
-
-		// Convertir el paquete a formato JSON
-		jsonData, err := json.Marshal(pkg)
-		if err != nil {
-			log.Printf("Error marshalling JSON: %v", err)
-			continue
-		}
-
-		// Enviar el JSON al canal jsonChan
-		jsonChan <- string(jsonData)
-	}
-}
-
-// using marshal to convert obj into json
-func toJSONString(obj interface{}) string {
-	jsonData, err := json.Marshal(obj)
-	if err != nil {
-		log.Printf("Error marshalling JSON: %v", err)
-		return ""
-	}
-	return string(jsonData)
-}
-
-// sendToZincSearch:
-// send pkgs to zincsearch using Bulk
-func sendToZincSearch(jsonData string) {
-	fmt.Println("Sending package to ZincSearch...")
-	req, err := http.NewRequest("POST", "http://localhost:4080/api/_bulkv2", strings.NewReader(jsonData))
-	if err != nil {
-		fmt.Println("Error creating request:", err)
-		return
-	}
-
-	req.SetBasicAuth("admin", "Complexpass#123")
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_4) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/81.0.4044.138 Safari/537.36")
-
-	client := &http.Client{
-		Timeout: time.Second * 10, // Timeout de 10 segundos, ajusta según tus necesidades
-	}
-
-	resp, err := client.Do(req)
-	if err != nil {
-		fmt.Println("Error sending request:", err)
-		return
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		fmt.Println("Error in response. Status code:", resp.StatusCode)
-		return
-	}
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		fmt.Println("Error reading response body:", err)
-		return
-	}
-
-	fmt.Println("Package Sent successfully!")
-	fmt.Println("Response Body:", string(body))
-}
-
-// main function of Indexer program
+// main: main function of indexer program
 func main() {
 	if len(os.Args) < 2 {
 		fmt.Println("Please provide a file to index.")
@@ -247,65 +254,34 @@ func main() {
 	defer fmt.Println("Main goroutine completed")
 
 	pkgChan := make(chan EmailPkg, 500)
-	jsonChan := make(chan string)
 
-	var wg sync.WaitGroup
+	// initialize workers
+	var workerWg sync.WaitGroup
+	for i := 0; i < workers; i++ {
+		workerWg.Add(1)
+		go worker(pkgChan, &workerWg)
+	}
 
-	// go routine to process pkgs
+	// reading dirs
+	var readDirWg sync.WaitGroup
+	readDirWg.Add(1)
+	go readDirectory(directoryPath, &readDirWg, pkgChan)
+
+	// closing the channel when all the work is done
 	go func() {
-		var emailsReceived int
-		var emailBuffer []string
-
-		for jsonData := range jsonChan {
-			emailBuffer = append(emailBuffer, jsonData)
-			emailsReceived++
-
-			if emailsReceived == emailsPerPkg {
-				// extract emails properties from email pkgs
-				var records []string
-				for _, emailPkgStr := range emailBuffer {
-					var emailPkg EmailPkg
-					if err := json.Unmarshal([]byte(emailPkgStr), &emailPkg); err == nil {
-						records = append(records, toJSONString(emailPkg.Emails[0]))
-					}
-				}
-
-				// parsing las json
-				finalJSON := fmt.Sprintf(`{"index": "emails", "records": [%s]}`, strings.Join(records, ","))
-
-				// sending to zincsearch
-				sendToZincSearch(finalJSON)
-				emailsReceived = 0
-				emailBuffer = nil
-			}
-		}
-	}()
-
-	// Leyendo directorios y archivos
-	wg.Add(1)
-	go readDirectory(directoryPath, &wg, pkgChan)
-
-	// Iniciar la goroutine para procesar paquetes
-	wg.Add(1)
-	go processPkgs(pkgChan, jsonChan, &wg)
-
-	// Goroutine para cerrar el canal pkgChan después de que todas las goroutines hayan completado su trabajo
-	go func() {
-		wg.Wait()
+		readDirWg.Wait()
 		close(pkgChan)
+		workerWg.Wait()
 		mainWg.Done()
 	}()
 
-	// Medir tiempo de ejecución
+	// counting time of execution
 	startTime := time.Now()
 
-	// Esperar a que todas las goroutines completen su trabajo
+	// wait for all goroutines to finish
 	mainWg.Wait()
 
-	// Cerrar el canal jsonChan después de que processPkgs haya terminado
-	close(jsonChan)
-
-	// Medir tiempo de ejecución
+	// time elapsed
 	elapsedTime := time.Since(startTime)
 	fmt.Printf("Processing took %s\n", elapsedTime)
 }
