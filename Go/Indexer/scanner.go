@@ -47,12 +47,11 @@ func ParseLine(line string, email *Email, fileName string) {
 
 	for prefix, field := range prefixMap {
 		if strings.HasPrefix(line, prefix) {
-			// extra procedure for Message Id
+			// Extra procedure for Message Id
 			if prefix == "Message-ID: " {
-				idStart := strings.Index(line, "<") + 1
-				idEnd := strings.Index(line, ">")
-				if idStart != -1 && idEnd != -1 && idEnd > idStart {
-					messageID := strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(line[idStart:idEnd], ".JavaMail.evans@thyme"), ".JavaMail.evans@thyme"))
+				parts := strings.Fields(line)
+				if len(parts) > 1 {
+					messageID := strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(parts[1], ".JavaMail.evans@thyme"), ".JavaMail.evans@thyme"))
 					if messageID == "" {
 						// Null file
 						log.Println("Invalid MessageID in file ", fileName)
@@ -60,13 +59,13 @@ func ParseLine(line string, email *Email, fileName string) {
 					*field = messageID
 				}
 			} else {
-				// same procedure for other fields
+				// Same procedure for other fields
 				*field = strings.TrimSpace(strings.TrimPrefix(line, prefix))
 			}
 			return
 		}
 	}
 
-	// dont match with any prefix? Then it's email content text
+	// If no prefix matches, it's email content text
 	email.Content += line + "\n"
 }

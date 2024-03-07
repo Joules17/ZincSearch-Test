@@ -1,25 +1,15 @@
 package Indexer
 
 import (
+	"fmt"
 	"sync"
 )
 
-func Worker(pkgChan <-chan EmailPkg, wg *sync.WaitGroup, bulkSize int) {
+func Worker(wg *sync.WaitGroup, emailChannel <-chan []Email) {
 	defer wg.Done()
 
-	var emails []Email
-
-	for pkg := range pkgChan {
-		emails = append(emails, pkg.Emails...)
-
-		if len(emails) >= bulkSize {
-			SendToZincSearch(emails[:bulkSize])
-			emails = emails[bulkSize:]
-		}
-	}
-
-	if len(emails) > 0 {
+	for emails := range emailChannel {
+		fmt.Println("Pkg created and sent it to ZincSearch...")
 		SendToZincSearch(emails)
 	}
-
 }

@@ -6,7 +6,6 @@ import (
 	"io"
 	"net/http"
 	"strings"
-	"time"
 )
 
 // constants settings
@@ -20,7 +19,7 @@ const (
 // based on email Pkg provided sends a bulkv2 petition to ZincSearch
 // sendToZincSearch based on email Pkg provided sends a bulkv2 petition to ZincSearch
 func SendToZincSearch(emails []Email) {
-	fmt.Println("Sending Package to ZincSearch...")
+	// fmt.Println("Sending Package to ZincSearch...")
 
 	reqBody, err := json.Marshal(map[string]interface{}{
 		"index":   "emails",
@@ -42,11 +41,7 @@ func SendToZincSearch(emails []Email) {
 	req.Header.Set("Content-Type", "application/json")
 	// req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_4) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/81.0.4044.138 Safari/537.36")
 
-	client := &http.Client{
-		Timeout: 10 * time.Second,
-	}
-
-	resp, err := client.Do(req)
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		fmt.Println("Error sending request: ", err)
 		return
@@ -65,6 +60,6 @@ func SendToZincSearch(emails []Email) {
 		return
 	}
 
-	fmt.Println("Package sent successfully!")
+	// fmt.Println("Package sent successfully!")
 	fmt.Println("Response body: ", string(body))
 }
