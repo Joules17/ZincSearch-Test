@@ -4,6 +4,7 @@ import (
 	"ZincSearchTest/Go/Indexer"
 	"fmt"
 	"os"
+	"runtime"
 	"runtime/pprof"
 	"sync"
 	"time"
@@ -30,6 +31,7 @@ func main() {
 	}
 	defer cpuProfileFile.Close()
 
+	runtime.LockOSThread()
 	pprof.StartCPUProfile(cpuProfileFile)
 
 	// check index if exist
@@ -39,7 +41,9 @@ func main() {
 	StartIndexing(directoryPath)
 
 	// Stop CPU profiling
+	time.Sleep(5 * time.Second)
 	pprof.StopCPUProfile()
+	runtime.UnlockOSThread()
 
 	// Initialize Server
 	// Server.Initialize_Server()
