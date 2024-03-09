@@ -1,52 +1,62 @@
 package Indexer
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
 	"sync"
 )
 
-var EmailsList []Email
-var mu sync.Mutex
+const MaxThreads = 900 // max number of concurrent go routines
 
 // read directory function
 // looks for files given a path as arg (recursively)
-func ReadDirectory(directoryPath string, wg *sync.WaitGroup, bulkSize int, emailChannel chan []Email) {
-	defer wg.Done()
+func ReadDirectory(directoryPath string, wg *sync.WaitGroup, bulkSize int, emailChannel chan Email) {
+	semaphore := make(chan struct{}, MaxThreads)
 
 	files, err := os.ReadDir(directoryPath)
+
 	if err != nil {
 		log.Printf("Error reading directory %s: %v", directoryPath, err)
 		return
 	}
 
 	for _, file := range files {
+
 		filePath := filepath.Join(directoryPath, file.Name())
 		if file.IsDir() {
-			wg.Add(1)
-			go ReadDirectory(filePath, wg, bulkSize, emailChannel)
+			ReadDirectory(filePath, wg, bulkSize, emailChannel)
 		} else {
-			fileContent, err := os.ReadFile(filePath)
-			if err != nil {
-				log.Printf("Error reading file %s: %v", filePath, err)
-				continue
-			}
+			wg.Add(1)
+			semaphore <- struct{}{} // add 1 to the semaphore
+			go func(filePath string, file os.DirEntry) {
+				defer func() {
+					<-semaphore // release the semaphore
+					wg.Done()
+				}()
+				ProcessFile(filePath, file, wg, bulkSize, emailChannel)
 
-			email, err := ScanFile(file.Name(), string(fileContent))
-
-			if err != nil {
-				log.Printf("Error scanning file %s: %v", filePath, err)
-				continue
-			}
-
-			mu.Lock()
-			EmailsList = append(EmailsList, email)
-			if len(EmailsList) >= bulkSize {
-				emailChannel <- EmailsList[:bulkSize]
-				EmailsList = EmailsList[bulkSize:]
-			}
-			mu.Unlock()
+			}(filePath, file)
 		}
 	}
+}
+
+// process file function
+// process file content and add it to channel
+func ProcessFile(filePath string, file os.DirEntry, wg *sync.WaitGroup, bulkSize int, emailChannel chan Email) {
+	fileContent, err := os.ReadFile(filePath)
+	if err != nil {
+		fmt.Println("Error reading file: ", filePath)
+		return // ignore file
+	}
+
+	email, err := ScanFile(file.Name(), string(fileContent))
+
+	if err != nil {
+		fmt.Println("Error scanning file: ", filePath)
+		return // ignore file
+	}
+
+	emailChannel <- email
 }

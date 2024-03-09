@@ -3,7 +3,6 @@ package Indexer
 import (
 	"fmt"
 	"net/http"
-	"time"
 )
 
 // constants
@@ -26,11 +25,8 @@ func CheckIndex() {
 	req.SetBasicAuth(ZincSearchUser, ZincSearchPass)
 	req.Header.Set("Content-Type", "application/json")
 
-	client := &http.Client{
-		Timeout: 5 * time.Second,
-	}
+	resp, err := http.DefaultClient.Do(req)
 
-	resp, err := client.Do(req)
 	if err != nil {
 		fmt.Println("Error sending request ", err)
 		return
@@ -59,11 +55,7 @@ func DeleteIndex() {
 	req.SetBasicAuth(ZincSearchUser, ZincSearchPass)
 	req.Header.Set("Content-Type", "application/json")
 
-	client := &http.Client{
-		Timeout: 5 * time.Second,
-	}
-
-	resp, err := client.Do(req)
+	resp, err := http.DefaultClient.Do(req)
 
 	if err != nil {
 		fmt.Println("Error sending request")

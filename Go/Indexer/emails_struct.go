@@ -19,8 +19,3 @@ type Email struct {
 	XFileName               string `json:"x_file_name"`
 	Content                 string `json:"content"`
 }
-
-// EmailPkg Struct
-type EmailPkg struct {
-	Emails []Email `json:"emails"`
-}

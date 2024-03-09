@@ -10,8 +10,8 @@ import (
 )
 
 const (
-	bulkSize    = 30000
-	num_workers = 10
+	bulkSize    = 40000
+	num_workers = 4
 )
 
 func main() {
@@ -49,44 +49,40 @@ func main() {
 // function that initialize indexing process
 func StartIndexing(directoryPath string) {
 	// WaitGroups:
-	var readDirWg sync.WaitGroup
 	var mainWg sync.WaitGroup
-	var workerWg sync.WaitGroup
-
+	var readDirWg sync.WaitGroup
+	var workersWg sync.WaitGroup
 	// ----------------------------------------------------------------------------
 	fmt.Println("Iniciando indexador...")
+
+	// counting time of execution:
+	startTime := time.Now()
+
 	mainWg.Add(1)
-
 	// email channel
-	emailChannel := make(chan []Indexer.Email, bulkSize)
+	emailChannel := make(chan Indexer.Email, bulkSize)
 
+	// workers
 	for i := 0; i < num_workers; i++ {
-		workerWg.Add(1)
-		go Indexer.Worker(&workerWg, emailChannel)
+		workersWg.Add(1)
+		go Indexer.Worker(&workersWg, emailChannel, bulkSize)
 	}
 
 	// reading dir
-	readDirWg.Add(1)
-	go Indexer.ReadDirectory(directoryPath, &readDirWg, bulkSize, emailChannel)
+	Indexer.ReadDirectory(directoryPath, &readDirWg, bulkSize, emailChannel)
 
 	// wait for all goroutines readers to finish
 	go func() {
 		// reader
 		readDirWg.Wait()
-		if len(Indexer.EmailsList) >= 0 {
-			emailChannel <- Indexer.EmailsList
-		}
+		// close email channel
 		close(emailChannel)
 
 		// workers
-		workerWg.Wait()
+		workersWg.Wait()
 		mainWg.Done()
 	}()
 
-	// counting time of execution:
-	startTime := time.Now()
-
-	// wait for all goroutines to finish
 	mainWg.Wait()
 
 	// counting time of execution
