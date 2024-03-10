@@ -2,6 +2,7 @@ package main
 
 import (
 	"ZincSearchTest/Go/Indexer"
+	"ZincSearchTest/Go/Server"
 	"fmt"
 	"os"
 	"runtime"
@@ -16,37 +17,39 @@ const (
 )
 
 func main() {
-	if len(os.Args) < 2 {
-		fmt.Println("Please provide a file to index next time.")
+	// ask user for choice
+	choice, directoryPath := GetUserChoice()
+	switch choice {
+	case 1:
+		// Start Indexing
+		// Enable CPU profiling
+		cpuProfileFile, err := os.Create("cpu.prof")
+		if err != nil {
+			fmt.Println("Error creating CPU profile:", err)
+			os.Exit(1)
+		}
+		defer cpuProfileFile.Close()
+
+		runtime.LockOSThread()
+		pprof.StartCPUProfile(cpuProfileFile)
+
+		// check index if exist
+		Indexer.CheckIndex()
+
+		// Initialize indexing
+		StartIndexing(directoryPath)
+
+		// Stop CPU profiling
+		time.Sleep(5 * time.Second)
+		pprof.StopCPUProfile()
+		runtime.UnlockOSThread()
+	case 2:
+		// Initialize Server
+		Server.InitializeServer()
+	default:
+		fmt.Println("Choose a valid option next time")
 		os.Exit(1)
 	}
-
-	directoryPath := os.Args[1]
-
-	// Enable CPU profiling
-	cpuProfileFile, err := os.Create("cpu.prof")
-	if err != nil {
-		fmt.Println("Error creating CPU profile:", err)
-		os.Exit(1)
-	}
-	defer cpuProfileFile.Close()
-
-	runtime.LockOSThread()
-	pprof.StartCPUProfile(cpuProfileFile)
-
-	// check index if exist
-	Indexer.CheckIndex()
-
-	// Initialize indexing
-	StartIndexing(directoryPath)
-
-	// Stop CPU profiling
-	time.Sleep(5 * time.Second)
-	pprof.StopCPUProfile()
-	runtime.UnlockOSThread()
-
-	// Initialize Server
-	// Server.Initialize_Server()
 }
 
 // Start_Index:
@@ -92,4 +95,33 @@ func StartIndexing(directoryPath string) {
 	// counting time of execution
 	elapsedTime := time.Since(startTime)
 	fmt.Println("Indexing took: ", elapsedTime)
+}
+
+// GetUserChoice:
+// 1: Start Indexing, 2: Start Server
+func GetUserChoice() (int, string) {
+	fmt.Println("Select an option: ")
+	fmt.Println("1: Start Indexing")
+	fmt.Println("2: Start Server")
+
+	var choice int
+	var directoryPath string
+
+	_, err := fmt.Scan(&choice)
+	if err != nil {
+		fmt.Println("Error reading input: ", err)
+		os.Exit(1)
+	}
+
+	if choice == 1 {
+		fmt.Println("Enter the directory path: ")
+
+		_, err := fmt.Scan(&directoryPath)
+		if err != nil {
+			fmt.Println("Error reading input (directory path): ", err)
+			os.Exit(1)
+		}
+	}
+
+	return choice, directoryPath
 }

@@ -1,13 +1,15 @@
 package Server
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 )
 
-func Initialize_Server() {
+func InitializeServer() {
+	fmt.Println("Initializing server...")
 	r := chi.NewRouter()
 
 	r.Use(
@@ -19,7 +21,13 @@ func Initialize_Server() {
 
 	r.Post("/search", Search)
 
-	http.ListenAndServe(":3000", r)
+	serverAddr := ":3000"
+	fmt.Printf("Server is now running and listening on %s\n", serverAddr)
+
+	err := http.ListenAndServe(serverAddr, r)
+	if err != nil {
+		fmt.Println("Error starting server:", err)
+	}
 }
 
 func CorsHandler(next http.Handler) http.Handler {

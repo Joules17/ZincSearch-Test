@@ -2,7 +2,6 @@ package Indexer
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"sync"
@@ -18,7 +17,7 @@ func ReadDirectory(directoryPath string, wg *sync.WaitGroup, bulkSize int, email
 	files, err := os.ReadDir(directoryPath)
 
 	if err != nil {
-		log.Printf("Error reading directory %s: %v", directoryPath, err)
+		fmt.Printf("Error reading directory %s: %v", directoryPath, err)
 		return
 	}
 
@@ -47,7 +46,7 @@ func ReadDirectory(directoryPath string, wg *sync.WaitGroup, bulkSize int, email
 func ProcessFile(filePath string, file os.DirEntry, wg *sync.WaitGroup, bulkSize int, emailChannel chan Email) {
 	fileContent, err := os.ReadFile(filePath)
 	if err != nil {
-		fmt.Println("Error reading file: ", filePath)
+		fmt.Println("Error reading file:", filePath)
 		return // ignore file
 	}
 
