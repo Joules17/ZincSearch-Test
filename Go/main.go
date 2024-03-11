@@ -57,7 +57,7 @@ func main() {
 func StartIndexing(directoryPath string) {
 	// WaitGroups:
 	var mainWg sync.WaitGroup
-	var readDirWg sync.WaitGroup
+	var readFileWg sync.WaitGroup
 	var workersWg sync.WaitGroup
 	// ----------------------------------------------------------------------------
 	fmt.Println("Iniciando indexador...")
@@ -72,16 +72,17 @@ func StartIndexing(directoryPath string) {
 	// workers
 	for i := 0; i < num_workers; i++ {
 		workersWg.Add(1)
+		fmt.Println("Se ha lanzado un Worker")
 		go Indexer.Worker(&workersWg, emailChannel, bulkSize)
 	}
 
 	// reading dir
-	Indexer.ReadDirectory(directoryPath, &readDirWg, bulkSize, emailChannel)
+	Indexer.ReadDirectory(directoryPath, &readFileWg, bulkSize, emailChannel)
 
 	// wait for all goroutines readers to finish
 	go func() {
 		// reader
-		readDirWg.Wait()
+		readFileWg.Wait()
 		// close email channel
 		close(emailChannel)
 

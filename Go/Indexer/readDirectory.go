@@ -2,18 +2,17 @@ package Indexer
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sync"
 )
 
-const MaxThreads = 900 // max number of concurrent go routines
+var semaphore = make(chan struct{}, 900)
 
 // read directory function
 // looks for files given a path as arg (recursively)
 func ReadDirectory(directoryPath string, wg *sync.WaitGroup, bulkSize int, emailChannel chan Email) {
-	semaphore := make(chan struct{}, MaxThreads)
-
 	files, err := os.ReadDir(directoryPath)
 
 	if err != nil {
@@ -44,17 +43,28 @@ func ReadDirectory(directoryPath string, wg *sync.WaitGroup, bulkSize int, email
 // process file function
 // process file content and add it to channel
 func ProcessFile(filePath string, file os.DirEntry, wg *sync.WaitGroup, bulkSize int, emailChannel chan Email) {
-	fileContent, err := os.ReadFile(filePath)
+	fileHandle, err := os.Open(filePath)
 	if err != nil {
-		fmt.Println("Error reading file:", filePath)
+		fmt.Println("Error opening file:", filePath, err)
+		return
+	}
+	defer fileHandle.Close()
+
+	fileContent, err := io.ReadAll(fileHandle)
+	if err != nil {
+		fmt.Println("Error reading file:", filePath, err)
 		return // ignore file
 	}
 
 	email, err := ScanFile(file.Name(), string(fileContent))
-
 	if err != nil {
 		fmt.Println("Error scanning file: ", filePath)
 		return // ignore file
+	}
+
+	// Close the file explicitly after reading
+	if err := fileHandle.Close(); err != nil {
+		fmt.Println("Error closing file:", filePath, err)
 	}
 
 	emailChannel <- email
