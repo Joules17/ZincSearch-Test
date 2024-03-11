@@ -10,7 +10,9 @@ import (
 )
 
 type Query struct {
-	Query string `json:"input"`
+	Term     string `json:"input"`
+	From     int    `json:"page"`
+	PageSize int    `json:"pageSize"`
 }
 
 // funct search
@@ -21,35 +23,39 @@ func Search(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
 
 	var body Query
+
 	err := json.NewDecoder(r.Body).Decode(&body)
 
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	bodyJson, err := json.Marshal(body.Query)
+	fmt.Println("Query:", body.Term, body.From, body.PageSize)
+
+	// query for zincsearch
+	query := map[string]interface{}{
+		"search_type": "match",
+		"query": map[string]interface{}{
+			"term": body.Term,
+		},
+		"from":        body.From,
+		"max_results": body.PageSize,
+		"_source":     []string{},
+	}
+
+	queryJSON, err := json.Marshal(query)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	fmt.Println("Query:", string(bodyJson))
+	fmt.Println("ZincSearch Query:", string(queryJSON))
 
-	query := `{
-		"query": {
-			"query_string": {
-				"query": "` + body.Query + `",
-				"default_field": "_all"
-			}
-		}
-	}`
-
-	fmt.Println("Elasticsearch Query:", query)
-
-	req, err := http.NewRequest("POST", "http://localhost:4080/es/emails/_search", strings.NewReader(query))
+	// make request to zincsearch
+	zincURL := "http://localhost:4080/api/emails/_search"
+	req, err := http.NewRequest("POST", zincURL, strings.NewReader(string(queryJSON)))
 	if err != nil {
 		log.Fatal(err)
 	}
-
 	req.SetBasicAuth("admin", "Complexpass#123")
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_4) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/81.0.4044.138 Safari/537.36")
@@ -58,10 +64,12 @@ func Search(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Fatal(err)
 	}
+
 	defer resp.Body.Close()
 
-	log.Println("Elasticsearch Response Status:", resp.StatusCode)
+	log.Println("ZincSearch Response Status:", resp.StatusCode)
 
+	// results
 	results, err := io.ReadAll(resp.Body)
 	if err != nil {
 		log.Fatal(err)
